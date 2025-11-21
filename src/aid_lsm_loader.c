@@ -16,18 +16,18 @@ int main(void)
     char bpf_obj_path[PATH_MAX];
     char exe_path[PATH_MAX];
 
-    // 실행 파일의 경로 가져오기
+    // Get executable path
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (len == -1) {
-        // readlink 실패 시 현재 디렉토리 기준 상대 경로 시도
+        // If readlink fails, try relative path from current directory
         snprintf(bpf_obj_path, sizeof(bpf_obj_path), "bpf/aid_lsm.bpf.o");
     } else {
         exe_path[len] = '\0';
         char *dir = dirname(exe_path);
-        // 실행 파일이 src/ 또는 루트에 있을 수 있음
+        // Executable may be in src/ or root directory
         snprintf(bpf_obj_path, sizeof(bpf_obj_path), "%s/../bpf/aid_lsm.bpf.o", dir);
 
-        // 파일이 없으면 현재 디렉토리 기준으로 시도
+        // If file doesn't exist, try from current directory
         if (access(bpf_obj_path, F_OK) != 0) {
             snprintf(bpf_obj_path, sizeof(bpf_obj_path), "bpf/aid_lsm.bpf.o");
         }
@@ -37,13 +37,13 @@ int main(void)
 
     obj = bpf_object__open_file(bpf_obj_path, NULL);
     if (!obj) {
-        fprintf(stderr, "bpf_object__open_file(%s) 실패\n", bpf_obj_path);
+        fprintf(stderr, "bpf_object__open_file(%s) failed\n", bpf_obj_path);
         return 1;
     }
 
     err = bpf_object__load(obj);
     if (err) {
-        fprintf(stderr, "bpf_object__load 실패: %d\n", err);
+        fprintf(stderr, "bpf_object__load failed: %d\n", err);
         return 1;
     }
 
@@ -62,7 +62,7 @@ int main(void)
     }
 
 
-    printf("[aid_lsm_loader] aid LSM BPF 로드 완료.\n");
-    // LSM BPF는 커널에 붙었으므로, 여기서 프로세스 종료해도 됨.
+    printf("[aid_lsm_loader] AID LSM BPF loaded successfully.\n");
+    // LSM BPF is attached to kernel, safe to exit process now.
     return 0;
 }

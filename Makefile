@@ -1,4 +1,4 @@
-# Makefile (루트 디렉토리)
+# Makefile (root directory)
 
 BPF_CLANG ?= clang
 CC ?= clang
@@ -9,7 +9,7 @@ LIBBPF_LDLIBS := $(shell pkg-config --libs libbpf 2>/dev/null || echo "-lbpf -le
 CFLAGS := -O2 -g -Wall -Iinclude
 LDFLAGS :=
 
-# pkg-config 실패 시 경고
+# Warning if pkg-config fails
 ifeq ($(LIBBPF_LDLIBS),-lbpf -lelf -lz)
 $(warning pkg-config for libbpf failed, using fallback: -lbpf -lelf -lz)
 endif
@@ -21,11 +21,11 @@ USER_BIN := src/aid_lsm_loader src/addagent
 
 all: $(BPF_OBJ) $(USER_BIN)
 
-# BPF 오브젝트 빌드
+# Build BPF object
 bpf/aid_lsm.bpf.o: bpf/aid_lsm.bpf.c bpf/vmlinux.h include/aid_shared.h
 	$(BPF_CLANG) $(BPF_CFLAGS) -c $< -o $@
 
-# 유저랜드 바이너리
+# Userland binaries
 src/aid_lsm_loader: src/aid_lsm_loader.c include/aid_shared.h
 	$(CC) $(CFLAGS) $(LIBBPF_CFLAGS) $< -o $@ $(LIBBPF_LDLIBS)
 
