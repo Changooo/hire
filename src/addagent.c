@@ -279,6 +279,28 @@ static int register_file_policy_for_inode(int map_fd,
     return 0;
 }
 
+// Register parent directory policy to allow file creation/access
+static int register_directory_policy(int map_fd,
+                                      uid_t uid,
+                                      const char *dir_path,
+                                      int allow_read,
+                                      int allow_write)
+{
+    struct stat st;
+    if (stat(dir_path, &st) < 0) {
+        fprintf(stderr, "[addagent] Warning: stat(%s) failed: %s\n", dir_path, strerror(errno));
+        return -1;
+    }
+
+    if (!S_ISDIR(st.st_mode)) {
+        return 0;  // Not a directory
+    }
+
+    printf("[addagent] Registering directory policy: %s\n", dir_path);
+    return register_file_policy_for_inode(map_fd, uid, st.st_dev, st.st_ino,
+                                          allow_read, allow_write);
+}
+
 // Register path (or glob pattern) → stat() → inode
 static int register_file_policy_for_path(int map_fd,
                                          uid_t uid,
@@ -292,7 +314,19 @@ static int register_file_policy_for_path(int map_fd,
     int flags = 0;
     int ret = glob(path_pattern, flags, NULL, &g);
     if (ret == GLOB_NOMATCH) {
-        fprintf(stderr, "[addagent] Warning: No files matching '%s'. Skipping.\n", path_pattern);
+        fprintf(stderr, "[addagent] Warning: No files matching '%s'.\n", path_pattern);
+
+        // Extract parent directory and register it
+        char *path_copy = strdup(path_pattern);
+        if (path_copy) {
+            char *dir = dirname(path_copy);
+            if (dir && strcmp(dir, ".") != 0 && strcmp(dir, "/") != 0) {
+                printf("[addagent] Attempting to register parent directory: %s\n", dir);
+                register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
+            }
+            free(path_copy);
+        }
+
         globfree(&g);
         return 0;  // Changed from -1 to 0 to continue processing
     } else if (ret != 0) {
@@ -314,6 +348,16 @@ static int register_file_policy_for_path(int map_fd,
         }
         register_file_policy_for_inode(map_fd, uid, st.st_dev, st.st_ino,
                                        allow_read, allow_write);
+
+        // Also register parent directory
+        char *path_copy = strdup(path);
+        if (path_copy) {
+            char *dir = dirname(path_copy);
+            if (dir && strcmp(dir, ".") != 0) {
+                register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
+            }
+            free(path_copy);
+        }
     }
 
     globfree(&g);

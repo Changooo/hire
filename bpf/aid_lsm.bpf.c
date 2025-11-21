@@ -54,12 +54,26 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
 
+    // First, check if there's a policy for this specific inode
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
-        // No policy found - deny (fail-close / whitelist mode)
-        bpf_printk("AID uid=%u denied ACCESS (no policy) dev=%llu ino=%llu\n",
-                   uid, key.dev, key.ino);
-        return -EACCES;
+        // No direct policy - check parent directory
+        struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
+        if (parent && parent != dentry) {
+            struct inode *parent_inode = BPF_CORE_READ(parent, d_inode);
+            if (parent_inode) {
+                key.dev = BPF_CORE_READ(parent_inode, i_sb, s_dev);
+                key.ino = BPF_CORE_READ(parent_inode, i_ino);
+                perm = bpf_map_lookup_elem(&inode_policies, &key);
+            }
+        }
+
+        // Still no policy found - deny (fail-close / whitelist mode)
+        if (!perm) {
+            bpf_printk("AID uid=%u denied ACCESS (no policy) dev=%llu ino=%llu\n",
+                       uid, key.dev, key.ino);
+            return -EACCES;
+        }
     }
 
     // Check MAY_READ / MAY_WRITE bits in mask
