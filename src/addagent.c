@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
+#include <libgen.h>
 #include <linux/bpf.h>
 #include <pwd.h>
 #include <bpf/bpf.h>
@@ -301,6 +302,28 @@ static int register_directory_policy(int map_fd,
                                           allow_read, allow_write);
 }
 
+// Extract parent directory path safely
+static char *get_parent_dir(const char *path)
+{
+    if (!path || *path == '\0')
+        return NULL;
+
+    char *path_copy = strdup(path);
+    if (!path_copy)
+        return NULL;
+
+    char *dir = dirname(path_copy);
+    if (!dir || strcmp(dir, ".") == 0 || strcmp(dir, "/") == 0) {
+        free(path_copy);
+        return NULL;
+    }
+
+    // dirname modifies path_copy, so we need to copy the result
+    char *result = strdup(dir);
+    free(path_copy);
+    return result;
+}
+
 // Register path (or glob pattern) → stat() → inode
 static int register_file_policy_for_path(int map_fd,
                                          uid_t uid,
@@ -317,14 +340,11 @@ static int register_file_policy_for_path(int map_fd,
         fprintf(stderr, "[addagent] Warning: No files matching '%s'.\n", path_pattern);
 
         // Extract parent directory and register it
-        char *path_copy = strdup(path_pattern);
-        if (path_copy) {
-            char *dir = dirname(path_copy);
-            if (dir && strcmp(dir, ".") != 0 && strcmp(dir, "/") != 0) {
-                printf("[addagent] Attempting to register parent directory: %s\n", dir);
-                register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
-            }
-            free(path_copy);
+        char *dir = get_parent_dir(path_pattern);
+        if (dir) {
+            printf("[addagent] Attempting to register parent directory: %s\n", dir);
+            register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
+            free(dir);
         }
 
         globfree(&g);
@@ -350,13 +370,10 @@ static int register_file_policy_for_path(int map_fd,
                                        allow_read, allow_write);
 
         // Also register parent directory
-        char *path_copy = strdup(path);
-        if (path_copy) {
-            char *dir = dirname(path_copy);
-            if (dir && strcmp(dir, ".") != 0) {
-                register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
-            }
-            free(path_copy);
+        char *dir = get_parent_dir(path);
+        if (dir) {
+            register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
+            free(dir);
         }
     }
 
