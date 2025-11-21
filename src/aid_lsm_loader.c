@@ -33,6 +33,13 @@ int main(void)
         }
     }
 
+    // Check if map is already pinned
+    if (access(AID_MAP_PATH, F_OK) == 0) {
+        fprintf(stderr, "AID LSM already loaded (map exists at %s)\n", AID_MAP_PATH);
+        fprintf(stderr, "To reload, first run: sudo rm %s\n", AID_MAP_PATH);
+        return 1;
+    }
+
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
 
     obj = bpf_object__open_file(bpf_obj_path, NULL);

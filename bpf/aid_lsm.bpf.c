@@ -56,8 +56,10 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
 
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
-        // No policy found - allow (fail-open). Change to -EACCES for deny.
-        return 0;
+        // No policy found - deny (fail-close / whitelist mode)
+        bpf_printk("AID uid=%u denied ACCESS (no policy) dev=%llu ino=%llu\n",
+                   uid, key.dev, key.ino);
+        return -EACCES;
     }
 
     // Check MAY_READ / MAY_WRITE bits in mask
