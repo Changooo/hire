@@ -25,14 +25,14 @@ struct {
     __uint(max_entries, 16384);
 } inode_policies SEC(".maps");
 
-// LSM: file_open
-SEC("lsm/file_open")
-int BPF_PROG(aid_enforce_file_open, struct file *file, int mask)
+// LSM: file_permission - called on every file access
+SEC("lsm/file_permission")
+int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
 {
     __u64 uid_gid = bpf_get_current_uid_gid();
     __u32 uid = uid_gid & 0xffffffff;
 
-    // 일반 uid는 무시
+    // Ignore non-AID users
     if (uid < AID_UID_BASE || uid >= AID_UID_MAX)
         return 0;
 
@@ -56,11 +56,11 @@ int BPF_PROG(aid_enforce_file_open, struct file *file, int mask)
 
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
-        // 정책 없으면 허용 (fail-open). 필요시 여기서 deny로 바꿔도 됨.
+        // No policy found - allow (fail-open). Change to -EACCES for deny.
         return 0;
     }
 
-    // mask에 MAY_READ / MAY_WRITE 비트 설정 여부 확인
+    // Check MAY_READ / MAY_WRITE bits in mask
     if ((mask & MAY_READ) && !perm->allow_read) {
         bpf_printk("AID uid=%u denied READ dev=%llu ino=%llu\n",
                    uid, key.dev, key.ino);

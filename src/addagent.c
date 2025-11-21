@@ -292,9 +292,9 @@ static int register_file_policy_for_path(int map_fd,
     int flags = 0;
     int ret = glob(path_pattern, flags, NULL, &g);
     if (ret == GLOB_NOMATCH) {
-        fprintf(stderr, "[addagent] glob: No files matching '%s'.\n", path_pattern);
+        fprintf(stderr, "[addagent] Warning: No files matching '%s'. Skipping.\n", path_pattern);
         globfree(&g);
-        return -1;
+        return 0;  // Changed from -1 to 0 to continue processing
     } else if (ret != 0) {
         fprintf(stderr, "[addagent] glob('%s') failed: ret=%d\n", path_pattern, ret);
         globfree(&g);
