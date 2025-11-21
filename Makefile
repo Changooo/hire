@@ -1,0 +1,31 @@
+# Makefile (루트 디렉토리)
+
+BPF_CLANG ?= clang
+CC ?= clang
+
+LIBBPF_CFLAGS := $(shell pkg-config --cflags libbpf 2>/dev/null)
+LIBBPF_LDLIBS := $(shell pkg-config --libs libbpf 2>/dev/null)
+
+CFLAGS := -O2 -g -Wall -Iinclude
+LDFLAGS :=
+
+BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_x86
+
+BPF_OBJ := bpf/aid_lsm.bpf.o
+USER_BIN := src/aid_lsm_loader src/addagent
+
+all: $(BPF_OBJ) $(USER_BIN)
+
+# BPF 오브젝트 빌드
+bpf/aid_lsm.bpf.o: bpf/aid_lsm.bpf.c bpf/vmlinux.h include/aid_shared.h
+	$(BPF_CLANG) $(BPF_CFLAGS) -c $< -o $@
+
+# 유저랜드 바이너리
+src/aid_lsm_loader: src/aid_lsm_loader.c include/aid_shared.h
+	$(CC) $(CFLAGS) $(LIBBPF_CFLAGS) $< -o $@ $(LIBBPF_LDLIBS)
+
+src/addagent: src/addagent.c include/aid_shared.h
+	$(CC) $(CFLAGS) $(LIBBPF_CFLAGS) $< -o $@ $(LIBBPF_LDLIBS)
+
+clean:
+	rm -f $(BPF_OBJ) $(USER_BIN)

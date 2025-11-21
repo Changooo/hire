@@ -1,0 +1,12 @@
+agentname: testagent
+permissions:
+  files:
+    - path: /tmp/allowed_read.txt
+      read: true
+      write: false
+    - path: /tmp/allowed_write.txt
+      read: true
+      write: true
+    - path: /tmp/denied.txt
+      read: false
+      write: false

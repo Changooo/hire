@@ -1,0 +1,9 @@
+agentname: testagent
+permissions:
+  files:
+    - path: /tmp/test.txt
+      read: true
+      write: false
+    - path: /tmp/*.log
+      read: true
+      write: true
