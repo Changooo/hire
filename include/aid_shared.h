@@ -2,6 +2,8 @@
 #ifndef AID_SHARED_H
 #define AID_SHARED_H
 
+#include <stdint.h>
+
 #define AID_UID_BASE 50000
 #define AID_UID_MAX  60000
 

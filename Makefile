@@ -17,7 +17,7 @@ endif
 BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_x86
 
 BPF_OBJ := bpf/aid_lsm.bpf.o
-USER_BIN := src/aid_lsm_loader src/addagent
+USER_BIN := src/aid_lsm_loader src/addagent src/hire
 
 all: $(BPF_OBJ) $(USER_BIN)
 
@@ -31,6 +31,9 @@ src/aid_lsm_loader: src/aid_lsm_loader.c include/aid_shared.h
 
 src/addagent: src/addagent.c include/aid_shared.h
 	$(CC) $(CFLAGS) $(LIBBPF_CFLAGS) $< -o $@ $(LIBBPF_LDLIBS)
+
+src/hire: src/hire.c include/aid_shared.h
+	$(CC) $(CFLAGS) $< -o $@
 
 clean:
 	rm -f $(BPF_OBJ) $(USER_BIN)
