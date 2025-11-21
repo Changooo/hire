@@ -3,11 +3,16 @@
 BPF_CLANG ?= clang
 CC ?= clang
 
-LIBBPF_CFLAGS := $(shell pkg-config --cflags libbpf 2>/dev/null)
-LIBBPF_LDLIBS := $(shell pkg-config --libs libbpf 2>/dev/null)
+LIBBPF_CFLAGS := $(shell pkg-config --cflags libbpf 2>/dev/null || echo "")
+LIBBPF_LDLIBS := $(shell pkg-config --libs libbpf 2>/dev/null || echo "-lbpf -lelf -lz")
 
 CFLAGS := -O2 -g -Wall -Iinclude
 LDFLAGS :=
+
+# pkg-config 실패 시 경고
+ifeq ($(LIBBPF_LDLIBS),-lbpf -lelf -lz)
+$(warning pkg-config for libbpf failed, using fallback: -lbpf -lelf -lz)
+endif
 
 BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_x86
 
