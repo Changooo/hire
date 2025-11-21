@@ -14,7 +14,7 @@ ifeq ($(LIBBPF_LDLIBS),-lbpf -lelf -lz)
 $(warning pkg-config for libbpf failed, using fallback: -lbpf -lelf -lz)
 endif
 
-BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_x86
+BPF_CFLAGS := -O2 -g -target bpf -D__TARGET_ARCH_x86 -D__BPF__
 
 BPF_OBJ := bpf/aid_lsm.bpf.o
 USER_BIN := src/aid_lsm_loader src/addagent src/hire

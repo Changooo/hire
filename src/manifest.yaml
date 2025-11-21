@@ -1,4 +1,4 @@
-agentname: testagent
+agentname: gd
 permissions:
   files:
     - path: /tmp/test.txt
