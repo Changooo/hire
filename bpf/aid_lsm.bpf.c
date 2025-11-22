@@ -54,6 +54,11 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
 
+    // Allow EXEC unconditionally (only control READ/WRITE)
+    if (mask & MAY_EXEC) {
+        return 0;
+    }
+
     // First, check if there's a policy for this specific inode
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
@@ -68,7 +73,7 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
             }
         }
 
-        // Still no policy found - deny (fail-close / whitelist mode)
+        // Still no policy found - deny READ/WRITE (fail-close / whitelist mode)
         if (!perm) {
             bpf_printk("AID uid=%u denied ACCESS (no policy) dev=%llu ino=%llu\n",
                        uid, key.dev, key.ino);
