@@ -1,10 +1,10 @@
-agentname: qqq
+agentname: example
 permissions:
   files:
-    - path: /home/changoo/hire/src/allow.txt
+    - path: /some/other/path/**
       read: true
       write: false
-    - path: /home/changoo/hire/agent/**
+    - path: /some/file
       read: true
       write: false
   network:

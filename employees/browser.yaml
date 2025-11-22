@@ -1,0 +1,12 @@
+agentname: browser
+permissions:
+  files:
+    - path: /home/changoo/hire/files/credential.txt
+      read: true
+      write: true
+    - path: /home/changoo/hire/files/schedule.txt
+      read: true
+      write: true
+    - path: /home/changoo/hire/agent/**
+      read: true
+      write: false

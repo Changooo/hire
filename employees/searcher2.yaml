@@ -1,0 +1,9 @@
+agentname: searcher2
+permissions:
+  files:
+    - path: /home/changoo/hire/files/schedule.txt
+      read: true
+      write: false
+    - path: /home/changoo/hire/agent/**
+      read: true
+      write: false

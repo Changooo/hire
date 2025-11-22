@@ -1,0 +1,11 @@
+agentname: reminder
+permissions:
+  files:
+    - path: /home/changoo/hire/files/schedule.txt
+      read: true
+      write: false
+    - path: /home/changoo/hire/agent/**
+      read: true
+      write: false
+  network:
+    mail: true
