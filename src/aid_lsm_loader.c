@@ -9,6 +9,15 @@
 
 #define AID_MAP_PATH "/sys/fs/bpf/aid_inode_policies"
 
+
+static int libbpf_print_fn(enum libbpf_print_level lvl,
+                           const char *fmt, va_list args)
+{
+    return vfprintf(stderr, fmt, args);
+}
+
+
+
 int main(void)
 {
     struct bpf_object *obj = NULL;
@@ -41,6 +50,7 @@ int main(void)
     }
 
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
+    libbpf_set_print(libbpf_print_fn);
 
     obj = bpf_object__open_file(bpf_obj_path, NULL);
     if (!obj) {
