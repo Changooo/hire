@@ -3,36 +3,27 @@ from openai import AsyncOpenAI
 import smtplib
 from email.mime.text import MIMEText
 import json
-
-client = AsyncOpenAI(api_key=
-
-
-"sk-pr
-
-oj-
-
-Ft2KiCoq1dE-QDloHfHX7q5JQqYt2eB9hXXk
-7O98Eqq-ms_o5irMai64TjOe
-JzsSScWGqsx0GIT3BlbkFJkz3mY
-TR5jsZa31juMJYB
+import decrypt
 
 
+MYPASSWD = "REDACTED_FOR_SAFETY"
+email = "cgl1234321@gmail.com"
+apikey = decrypt.load_api_key(MYPASSWD, infile="openaiapi.bin")
+gmailpw = decrypt.load_api_key(MYPASSWD, infile="gmailapppw.bin")
 
-j4acbHxvQflWmFSl_dxgL
+# email = ""
+# apikey = ""
+# gmailpw = ""
 
-
-iGAEYsMlB4icW70wz9MVhpSo1ZUzj")
-
+client = AsyncOpenAI(api_key=apikey)
 
 # ======================================================
-#  SMTP 실제 구현
+#  Gmail tools
 # ======================================================
-SMTP_EMAIL = "cgl1234321@gmail.com"
-SMTP_PASSWORD = "lkmuuuswveqhcb"   # 주의: 앱 비밀번호 필요
-
+SMTP_EMAIL = email
+SMTP_PASSWORD = gmailpw
 
 async def send_email(recipient: str, subject: str, body: str) -> str:
-    """Gmail SMTP 실제 구현."""
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = SMTP_EMAIL
@@ -97,7 +88,7 @@ async def stop(reason: str) -> str:
     
 
 # ======================================================
-#  Tool schemas (공식 beta.responses 방식)
+#  Tool schemas
 # ======================================================
 tools = [
     {
@@ -204,13 +195,13 @@ async def dispatch_tool_call(tool_call):
 
 
 # ======================================================
-#  Agent 실행 루프 (공식 beta)
+#  Agent loop
 # ======================================================
 MAX_TURNS = 3
 async def run_agent(user_message: str):
     turns = 0 
     messages = [
-        {"role": "developer", "content": "If you have done your task, use the stop tool to end the conversation."},
+        {"role": "developer", "content": "If you have done your task, or you do not have to call any tool, use the stop tool to end the conversation."},
         {"role": "user", "content": user_message}
     ]
 
@@ -228,10 +219,10 @@ async def run_agent(user_message: str):
                 if o.name == "stop":
                     return result
                 messages.append({"type": "function_call_output", "call_id": o.call_id, "output": result})
-                print(f"✅ Tool {o.name} called with arguments {o.arguments}")
+                print(f"[|=|=|] Tool {o.name} called with arguments {o.arguments}")
             
             elif o.type == "message":
-                print("✅ Assistant:", o.content[0].text)
+                print("[^__^] Assistant:", o.content[0].text)
 
             else:
                 raise RuntimeError("Unexpected response type:", o.type)
@@ -241,16 +232,13 @@ async def run_agent(user_message: str):
     return "Max turns reached."
 
 # ======================================================
-#  실행 예시
+#  Main
 # ======================================================
 async def main():
-    message = "/data1/changoo/agent/README.md 에 애국가 써줘."
-    # message = (
-    #     "send_email 기능 테스트할게. "
-    #     "recipient: cgl1234321@gmail.com, subject: 'hi', body: 'hello!' "
-    #     "이메일 보내줘."
-    # )
-    # message = "just stop the conversation now."
+    if len(sys.argv) < 2:
+        print("Usage: python main.py '<your message>'")
+        return
+    message = sys.argv[1]
     result = await run_agent(message)
     print("\n=== FINAL OUTPUT ===")
     print(result)
