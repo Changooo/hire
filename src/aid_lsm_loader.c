@@ -49,7 +49,7 @@ int main(void)
         return 1;
     }
 
-    libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
+    // libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
     libbpf_set_print(libbpf_print_fn);
 
     obj = bpf_object__open_file(bpf_obj_path, NULL);
