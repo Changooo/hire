@@ -95,19 +95,19 @@ int main(void)
     printf("  Program FD: %d, ID: %u, Type: %u\n", prog_fd, info.id, info.type);
     printf("  Link: %p\n", link);
 
-    struct bpf_map *map;
+    // struct bpf_map *map;
 
-    map = bpf_object__find_map_by_name(obj, "inode_policies");
-    if (!map) {
-        fprintf(stderr, "map 'inode_policies' not found\n");
-        return 1;
-    }
+    // map = bpf_object__find_map_by_name(obj, "inode_policies");
+    // if (!map) {
+    //     fprintf(stderr, "map 'inode_policies' not found\n");
+    //     return 1;
+    // }
 
-    err = bpf_map__pin(map, AID_MAP_PATH);
-    if (err) {
-        fprintf(stderr, "failed to pin map: %d\n", err);
-        return 1;
-    }
+    // err = bpf_map__pin(map, AID_MAP_PATH);
+    // if (err) {
+    //     fprintf(stderr, "failed to pin map: %d\n", err);
+    //     return 1;
+    // }
 
     // Pin the link to keep LSM attached
     err = bpf_link__pin(link, "/sys/fs/bpf/aid_lsm_link");
