@@ -50,6 +50,12 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     if (!inode)
         return 0;
 
+    // Allow access to character/block devices (stdin/stdout/stderr, /dev/null, etc.)
+    umode_t mode = BPF_CORE_READ(inode, i_mode);
+    if (S_ISCHR(mode) || S_ISBLK(mode)) {
+        return 0;
+    }
+
     key.dev = BPF_CORE_READ(inode, i_sb, s_dev);
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
@@ -63,13 +69,9 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     // Also allow pure READ on executable files (for dynamic linker, libraries, etc.)
     // This is a pragmatic approach: we only strictly control writes
     if (mask == MAY_READ) {
-        struct inode *ino_ptr = BPF_CORE_READ(dentry, d_inode);
-        if (ino_ptr) {
-            umode_t mode = BPF_CORE_READ(ino_ptr, i_mode);
-            // If file has any execute bit, allow read
-            if (mode & 0111) {
-                return 0;
-            }
+        // If file has any execute bit, allow read
+        if (mode & 0111) {
+            return 0;
         }
     }
 
