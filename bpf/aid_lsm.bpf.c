@@ -5,7 +5,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include <bpf/bpf_endian.h>
 
 #include "../include/aid_shared.h"
 
@@ -19,13 +18,9 @@
 #define S_IFMT   00170000
 #define S_IFBLK  0060000
 #define S_IFCHR  0020000
-#define S_IFSOCK 0140000
 
 #define S_ISBLK(m)  (((m) & S_IFMT) == S_IFBLK)
 #define S_ISCHR(m)  (((m) & S_IFMT) == S_IFCHR)
-#define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
-
-#define AF_INET 2
 
 
 char LICENSE[] SEC("license") = "GPL";
@@ -37,14 +32,6 @@ struct {
     __type(value, struct file_perm);
     __uint(max_entries, 16384);
 } inode_policies SEC(".maps");
-
-// uid + addr/port -> socket_perm (IPv4 only for now)
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, struct socket_key_v4);
-    __type(value, struct socket_perm);
-    __uint(max_entries, 4096);
-} socket_policies SEC(".maps");
 
 // LSM: file_permission - called on every file access
 SEC("lsm/file_permission")
@@ -78,9 +65,8 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
 
     // Allow access to character/block devices (stdin/stdout/stderr, /dev/null, etc.)
     umode_t mode = BPF_CORE_READ(inode, i_mode);
-    // Also allow sockets so that connect() is enforced in socket_connect hook
-    if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISSOCK(mode)) {
-        bpf_printk("[AID] ALLOW special mode=0x%x\n", mode);
+    if (S_ISCHR(mode) || S_ISBLK(mode)) {
+        bpf_printk("[AID] ALLOW device mode=0x%x\n", mode);
         return 0;
     }
 
@@ -215,59 +201,5 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     }
 
     bpf_printk("[AID] ALLOW policy match\n");
-    return 0;
-}
-
-// LSM: socket_connect - called before connect(2)
-SEC("lsm/socket_connect")
-int BPF_PROG(aid_enforce_socket_connect, struct socket *sock, struct sockaddr *address, int addrlen)
-{
-    __u64 uid_gid = bpf_get_current_uid_gid();
-    __u32 uid = uid_gid & 0xffffffff;
-
-    if (uid < AID_UID_BASE || uid >= AID_UID_MAX) {
-        return 0; // Non-AID user
-    }
-
-    if (!address) {
-        bpf_printk("[AID] SOCKET DENY uid=%u no address\n", uid);
-        return -EACCES;
-    }
-
-    __u16 family = 0;
-    bpf_probe_read_kernel(&family, sizeof(family), &address->sa_family);
-
-    // Currently only guard IPv4; other families are allowed
-    if (family != AF_INET) {
-        bpf_printk("[AID] SOCKET ALLOW uid=%u family=%u (non-IPv4)\n", uid, family);
-        return 0;
-    }
-
-    if (addrlen < sizeof(struct sockaddr_in)) {
-        bpf_printk("[AID] SOCKET DENY uid=%u short addrlen=%d\n", uid, addrlen);
-        return -EACCES;
-    }
-
-    struct sockaddr_in addr = {};
-    if (bpf_probe_read_kernel(&addr, sizeof(addr), address) < 0) {
-        bpf_printk("[AID] SOCKET DENY uid=%u read sockaddr failed\n", uid);
-        return -EACCES;
-    }
-
-    __u16 port = bpf_ntohs(addr.sin_port);
-    struct socket_key_v4 key = {
-        .uid = uid,
-        .family = family,
-        .port = port,
-        .addr = addr.sin_addr.s_addr, // network order
-    };
-
-    struct socket_perm *perm = bpf_map_lookup_elem(&socket_policies, &key);
-    if (!perm || !perm->allow_connect) {
-        bpf_printk("[AID] SOCKET DENY uid=%u addr=0x%x port=%u\n", uid, key.addr, key.port);
-        return -EACCES;
-    }
-
-    bpf_printk("[AID] SOCKET ALLOW uid=%u addr=0x%x port=%u\n", uid, key.addr, key.port);
     return 0;
 }
