@@ -4,6 +4,6 @@ permissions:
     - path: /home/changoo/hire/src/allow.txt
       read: true
       write: false
-    - path: /home/changoo/hire/agent/*
+    - path: /home/changoo/hire/agent/**
       read: true
       write: false
