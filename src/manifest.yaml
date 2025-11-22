@@ -1,6 +1,9 @@
-agentname: gd
+agentname: qqq
 permissions:
   files:
     - path: /home/changoo/hire/src/allow.txt
+      read: true
+      write: false
+    - path: /home/changoo/hire/agent/*
       read: true
       write: false
