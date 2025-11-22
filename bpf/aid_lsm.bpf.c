@@ -8,7 +8,7 @@
 char LICENSE[] SEC("license") = "GPL";
 
 // LSM: file_permission - called on every file access
-SEC("lsm/file_permission")
+SEC("lsm/file_open")
 int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
 {
     // 그냥 무조건 허용
