@@ -101,64 +101,82 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     // Also allow pure READ on executable files (for dynamic linker, libraries, etc.)
     // This is a pragmatic approach: we only strictly control writes
     if (mask == MAY_READ) {
-        // If file has any execute bit, allow read
-        if (mode & 0111) {
-            bpf_printk("[AID] ALLOW executable file mode=0x%x\n", mode);
-            return 0;
+
+        int len = 0;
+        #pragma unroll
+        for (int i = 0; i < sizeof(fname); i++) {
+            if (fname[i] == '\0')
+                break;
+            len++;
         }
 
-        // Allow READ from system library directories
-        // Get path from dentry chain
-        struct dentry *d = dentry;
-        char path[256] = {0};
-        int pos = 255;
-
-        // Walk up dentry tree to build path (backwards)
-        #pragma unroll
-        for (int i = 0; i < 20; i++) {
-            if (!d) break;
-
-            const char *name = BPF_CORE_READ(d, d_name.name);
-            if (!name) break;
-
-            // Read name into buffer
-            char namebuf[64];
-            bpf_probe_read_kernel_str(namebuf, sizeof(namebuf), name);
-
-            bpf_printk("[AID] LOGLOG file=%s namebuf=%s\n", fname, namebuf);
-
-            // Allow READ from system files
-            if (!(namebuf[0] == 'h' && namebuf[1] == 'o' && namebuf[2] == 'm' && namebuf[3] == 'e' && namebuf[4] == '\0')) {
-                bpf_printk("[AID] ALLOW READ from system files\n");
+        if (len >= 4) {
+            if (!(fname[len - 4] == '.' &&
+                fname[len - 3] == 't' &&
+                fname[len - 2] == 'x' &&
+                fname[len - 1] == 't')) {
                 return 0;
             }
-            // Check for system directories at any level
-            // if (namebuf[0] == 'l' && namebuf[1] == 'i' && namebuf[2] == 'b' && namebuf[3] == '\0') {
-            //     // Found "lib" directory
-            //     bpf_printk("[AID] ALLOW READ from /lib or /usr/lib\n");
-            //     return 0;
-            // }
-            // if (namebuf[0] == 'u' && namebuf[1] == 's' && namebuf[2] == 'r' && namebuf[3] == '\0') {
-            //     // Found "usr" directory - likely /usr/lib
-            //     struct dentry *parent = BPF_CORE_READ(d, d_parent);
-            //     if (parent) {
-            //         const char *pname = BPF_CORE_READ(parent, d_name.name);
-            //         char pbuf[8];
-            //         if (pname) {
-            //             bpf_probe_read_kernel_str(pbuf, sizeof(pbuf), pname);
-            //             // If parent is "lib", this is /usr/lib
-            //             if (pbuf[0] == 'l' && pbuf[1] == 'i' && pbuf[2] == 'b' && pbuf[3] == '\0') {
-            //                 bpf_printk("[AID] ALLOW READ from /usr/lib\n");
-            //                 return 0;
-            //             }
-            //         }
-            //     }
-            // }
-
-            // Move to parent
-            d = BPF_CORE_READ(d, d_parent);
-            if (d == BPF_CORE_READ(d, d_parent)) break; // reached root
         }
+
+        // If file has any execute bit, allow read
+        // if (mode & 0111) {
+        //     bpf_printk("[AID] ALLOW executable file mode=0x%x\n", mode);
+        //     return 0;
+        // }
+
+        // // Allow READ from system library directories
+        // // Get path from dentry chain
+        // struct dentry *d = dentry;
+        // char path[256] = {0};
+        // int pos = 255;
+
+        // // Walk up dentry tree to build path (backwards)
+        // #pragma unroll
+        // for (int i = 0; i < 20; i++) {
+        //     if (!d) break;
+
+        //     const char *name = BPF_CORE_READ(d, d_name.name);
+        //     if (!name) break;
+
+        //     // Read name into buffer
+        //     char namebuf[64];
+        //     bpf_probe_read_kernel_str(namebuf, sizeof(namebuf), name);
+
+        //     bpf_printk("[AID] LOGLOG file=%s namebuf=%s\n", fname, namebuf);
+
+        //     // Allow READ from other files than *.txt
+        //     if (!(namebuf[0] == 'h' && namebuf[1] == 'o' && namebuf[2] == 'm' && namebuf[3] == 'e' && namebuf[4] == '\0')) {
+        //         bpf_printk("[AID] ALLOW READ from system files\n");
+        //         return 0;
+        //     }
+        //     // Check for system directories at any level
+        //     // if (namebuf[0] == 'l' && namebuf[1] == 'i' && namebuf[2] == 'b' && namebuf[3] == '\0') {
+        //     //     // Found "lib" directory
+        //     //     bpf_printk("[AID] ALLOW READ from /lib or /usr/lib\n");
+        //     //     return 0;
+        //     // }
+        //     // if (namebuf[0] == 'u' && namebuf[1] == 's' && namebuf[2] == 'r' && namebuf[3] == '\0') {
+        //     //     // Found "usr" directory - likely /usr/lib
+        //     //     struct dentry *parent = BPF_CORE_READ(d, d_parent);
+        //     //     if (parent) {
+        //     //         const char *pname = BPF_CORE_READ(parent, d_name.name);
+        //     //         char pbuf[8];
+        //     //         if (pname) {
+        //     //             bpf_probe_read_kernel_str(pbuf, sizeof(pbuf), pname);
+        //     //             // If parent is "lib", this is /usr/lib
+        //     //             if (pbuf[0] == 'l' && pbuf[1] == 'i' && pbuf[2] == 'b' && pbuf[3] == '\0') {
+        //     //                 bpf_printk("[AID] ALLOW READ from /usr/lib\n");
+        //     //                 return 0;
+        //     //             }
+        //     //         }
+        //     //     }
+        //     // }
+
+        //     // Move to parent
+        //     d = BPF_CORE_READ(d, d_parent);
+        //     if (d == BPF_CORE_READ(d, d_parent)) break; // reached root
+        // }
     }
 
     // First, check if there's a policy for this specific inode
