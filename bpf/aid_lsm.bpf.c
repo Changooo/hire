@@ -125,6 +125,8 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
             char namebuf[64];
             bpf_probe_read_kernel_str(namebuf, sizeof(namebuf), name);
 
+            bpf_printk("[AID] LOGLOG file=%s namebuf=%s\n", fname, namebuf);
+
             // Allow READ from system files
             if (!(namebuf[0] == 'h' && namebuf[1] == 'o' && namebuf[2] == 'm' && namebuf[3] == 'e' && namebuf[4] == '\0')) {
                 bpf_printk("[AID] ALLOW READ from system files\n");
