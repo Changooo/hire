@@ -82,9 +82,16 @@ int main(void)
     }
 
     int prog_fd = bpf_program__fd(prog);
-    int prog_id = bpf_prog_get_id_from_fd(prog_fd);
+    struct bpf_prog_info info = {};
+    __u32 info_len = sizeof(info);
+
+    err = bpf_obj_get_info_by_fd(prog_fd, &info, &info_len);
+    if (err) {
+        fprintf(stderr, "Warning: failed to get prog info: %d\n", err);
+    }
+
     printf("[aid_lsm_loader] LSM program attached successfully\n");
-    printf("  Program FD: %d, ID: %d\n", prog_fd, prog_id);
+    printf("  Program FD: %d, ID: %u, Type: %u\n", prog_fd, info.id, info.type);
     printf("  Link: %p\n", link);
 
     struct bpf_map *map;
