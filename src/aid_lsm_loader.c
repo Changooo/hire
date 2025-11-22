@@ -95,7 +95,7 @@ int main(void)
     printf("  Program FD: %d, ID: %u, Type: %u\n", prog_fd, info.id, info.type);
     printf("  Link: %p\n", link);
 
-    // struct bpf_map *map;
+    struct bpf_map *map;
 
     map = bpf_object__find_map_by_name(obj, "inode_policies");
     if (!map) {
