@@ -64,7 +64,14 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
         return 0;
     }
 
-    key.dev = BPF_CORE_READ(inode, i_sb, s_dev);
+    // Convert kernel dev to stat-compatible format
+    // Kernel uses new_encode_dev: (major << 20) | minor
+    // stat uses old format: (major << 8) | minor
+    __u64 kdev = BPF_CORE_READ(inode, i_sb, s_dev);
+    __u32 major = kdev >> 20;
+    __u32 minor = kdev & 0xfffff;
+
+    key.dev = (major << 8) | (minor & 0xff);  // Old stat format
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
 
@@ -91,7 +98,10 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
         if (parent && parent != dentry) {
             struct inode *parent_inode = BPF_CORE_READ(parent, d_inode);
             if (parent_inode) {
-                key.dev = BPF_CORE_READ(parent_inode, i_sb, s_dev);
+                __u64 parent_kdev = BPF_CORE_READ(parent_inode, i_sb, s_dev);
+                __u32 parent_major = parent_kdev >> 20;
+                __u32 parent_minor = parent_kdev & 0xfffff;
+                key.dev = (parent_major << 8) | (parent_minor & 0xff);
                 key.ino = BPF_CORE_READ(parent_inode, i_ino);
                 perm = bpf_map_lookup_elem(&inode_policies, &key);
             }
