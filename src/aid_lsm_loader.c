@@ -54,19 +54,19 @@ int main(void)
         return 1;
     }
 
-    struct bpf_map *map;
+    // struct bpf_map *map;
 
-    map = bpf_object__find_map_by_name(obj, "inode_policies");
-    if (!map) {
-        fprintf(stderr, "map 'inode_policies' not found\n");
-        return 1;
-    }
+    // map = bpf_object__find_map_by_name(obj, "inode_policies");
+    // if (!map) {
+    //     fprintf(stderr, "map 'inode_policies' not found\n");
+    //     return 1;
+    // }
 
-    err = bpf_map__pin(map, AID_MAP_PATH);
-    if (err) {
-        fprintf(stderr, "failed to pin map: %d\n", err);
-        return 1;
-    }
+    // err = bpf_map__pin(map, AID_MAP_PATH);
+    // if (err) {
+    //     fprintf(stderr, "failed to pin map: %d\n", err);
+    //     return 1;
+    // }
 
 
     printf("[aid_lsm_loader] AID LSM BPF loaded successfully.\n");
