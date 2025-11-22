@@ -81,8 +81,15 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
 
-    bpf_printk("[AID] CHECK uid=%u dev=%llu ino=%llu mask=0x%x\n",
-               uid, key.dev, key.ino, mask);
+    // Try to get filename for debugging
+    const char *filename = BPF_CORE_READ(dentry, d_name.name);
+    char fname[64] = {0};
+    if (filename) {
+        bpf_probe_read_kernel_str(fname, sizeof(fname), filename);
+    }
+
+    bpf_printk("[AID] CHECK uid=%u dev=%llu ino=%llu mask=0x%x file=%s\n",
+               uid, key.dev, key.ino, mask, fname);
 
     // Allow EXEC unconditionally (including exec+read combinations)
     // When executing a file, kernel may check MAY_EXEC | MAY_READ together
