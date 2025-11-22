@@ -339,11 +339,11 @@ static int register_file_policy_for_path(int map_fd,
     if (ret == GLOB_NOMATCH) {
         fprintf(stderr, "[addagent] Warning: No files matching '%s'.\n", path_pattern);
 
-        // Extract parent directory and register it
+        // Extract parent directory and register it with READ enabled
         char *dir = get_parent_dir(path_pattern);
         if (dir) {
             printf("[addagent] Attempting to register parent directory: %s\n", dir);
-            register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
+            register_directory_policy(map_fd, uid, dir, 1, allow_write);  // always allow read for dirs
             free(dir);
         }
 
@@ -369,10 +369,10 @@ static int register_file_policy_for_path(int map_fd,
         register_file_policy_for_inode(map_fd, uid, st.st_dev, st.st_ino,
                                        allow_read, allow_write);
 
-        // Also register parent directory
+        // Also register parent directory with READ enabled (for directory traversal)
         char *dir = get_parent_dir(path);
         if (dir) {
-            register_directory_policy(map_fd, uid, dir, allow_read, allow_write);
+            register_directory_policy(map_fd, uid, dir, 1, allow_write);  // always allow read for dirs
             free(dir);
         }
     }
