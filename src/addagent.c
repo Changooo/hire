@@ -17,10 +17,13 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include "../include/aid_shared.h"
 
 #define AID_MAP_PATH "/sys/fs/bpf/aid_inode_policies"
+#define AID_SOCKET_MAP_PATH "/sys/fs/bpf/aid_socket_policies"
 #define AGENT_USER_PREFIX "agent_"
 
 // --- String utilities ---
@@ -47,6 +50,7 @@ static int starts_with(const char *s, const char *prefix)
 
 #define MAX_FILE_RULES 256
 #define MAX_PATH_LEN   4096
+#define MAX_NETWORK_RULES 256
 
 struct file_rule {
     char path[MAX_PATH_LEN];
@@ -54,10 +58,17 @@ struct file_rule {
     int write;
 };
 
+struct network_rule {
+    char host[64]; // IPv4 address string
+    int port;
+};
+
 struct manifest_data {
     char agentname[128];
     struct file_rule files[MAX_FILE_RULES];
+    struct network_rule networks[MAX_NETWORK_RULES];
     int file_count;
+    int network_count;
 };
 
 // --- Simple manifest.yaml parser ---
@@ -84,6 +95,7 @@ static int parse_manifest(const char *filename, struct manifest_data *out)
     char line[8192];
     int in_permissions = 0;
     int in_files = 0;
+    int in_network = 0;
     int current_rule_index = -1;
 
     while (fgets(line, sizeof(line), f)) {
@@ -108,6 +120,13 @@ static int parse_manifest(const char *filename, struct manifest_data *out)
 
         if (starts_with(p, "files:")) {
             in_files = 1;
+            in_network = 0;
+            continue;
+        }
+
+        if (starts_with(p, "network:")) {
+            in_network = 1;
+            in_files = 0;
             continue;
         }
 
@@ -134,6 +153,26 @@ static int parse_manifest(const char *filename, struct manifest_data *out)
             continue;
         }
 
+        if (in_network && starts_with(p, "-")) {
+            if (out->network_count >= MAX_NETWORK_RULES) {
+                fprintf(stderr, "Too many network rules (>%d)\n", MAX_NETWORK_RULES);
+                fclose(f);
+                return -1;
+            }
+            current_rule_index = out->network_count++;
+            memset(&out->networks[current_rule_index], 0, sizeof(struct network_rule));
+            // "- host: ..." inline
+            p++; // skip '-'
+            p = trim(p);
+            if (starts_with(p, "host:")) {
+                p += strlen("host:");
+                p = trim(p);
+                strncpy(out->networks[current_rule_index].host, p,
+                        sizeof(out->networks[current_rule_index].host) - 1);
+            }
+            continue;
+        }
+
         // Set path/read/write inside file rule
         if (in_files && current_rule_index >= 0) {
             if (starts_with(p, "path:")) {
@@ -151,6 +190,20 @@ static int parse_manifest(const char *filename, struct manifest_data *out)
                 p = trim(p);
                 out->files[current_rule_index].write =
                     (strcmp(p, "true") == 0 || strcmp(p, "True") == 0 || strcmp(p, "1") == 0);
+            }
+        }
+
+        // Set host/port inside network rule
+        if (in_network && current_rule_index >= 0) {
+            if (starts_with(p, "host:")) {
+                p += strlen("host:");
+                p = trim(p);
+                strncpy(out->networks[current_rule_index].host, p,
+                        sizeof(out->networks[current_rule_index].host) - 1);
+            } else if (starts_with(p, "port:")) {
+                p += strlen("port:");
+                p = trim(p);
+                out->networks[current_rule_index].port = atoi(p);
             }
         }
     }
@@ -458,6 +511,54 @@ static int register_file_policy_for_path(int map_fd,
     return 0;
 }
 
+static int open_socket_policy_map(void)
+{
+    int fd = bpf_obj_get(AID_SOCKET_MAP_PATH);
+    if (fd < 0) {
+        fprintf(stderr, "bpf_obj_get(%s) failed: %s\n",
+                AID_SOCKET_MAP_PATH, strerror(errno));
+    }
+    return fd;
+}
+
+static int register_socket_policy(int map_fd, uid_t uid,
+                                  const char *host, int port)
+{
+    if (!host || host[0] == '\0' || port <= 0 || port > 65535) {
+        fprintf(stderr, "[addagent] Invalid network rule host='%s' port=%d\n",
+                host ? host : "(null)", port);
+        return -1;
+    }
+
+    struct in_addr addr4;
+    if (inet_pton(AF_INET, host, &addr4) != 1) {
+        fprintf(stderr, "[addagent] Unsupported or invalid IPv4 address: %s\n", host);
+        return -1;
+    }
+
+    struct socket_key_v4 key = {
+        .uid = (uint32_t)uid,
+        .family = AF_INET,
+        .port = (uint16_t)port,
+        .addr = addr4.s_addr, // network order
+    };
+
+    struct socket_perm perm = {
+        .allow_connect = 1,
+    };
+
+    int ret = bpf_map_update_elem(map_fd, &key, &perm, BPF_ANY);
+    if (ret < 0) {
+        fprintf(stderr,
+                "bpf_map_update_elem(socket) failed: uid=%u host=%s port=%d errno=%s\n",
+                uid, host, port, strerror(errno));
+        return -1;
+    }
+
+    printf("[addagent] Registered socket uid=%u %s:%d\n", uid, host, port);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2) {
@@ -487,6 +588,12 @@ int main(int argc, char **argv)
     if (map_fd < 0)
         return 1;
 
+    int socket_map_fd = open_socket_policy_map();
+    if (socket_map_fd < 0) {
+        close(map_fd);
+        return 1;
+    }
+
     for (int i = 0; i < m.file_count; i++) {
         struct file_rule *r = &m.files[i];
         if (r->path[0] == 0) {
@@ -498,6 +605,19 @@ int main(int argc, char **argv)
         register_file_policy_for_path(map_fd, uid, r->path, r->read, r->write);
     }
 
+    for (int i = 0; i < m.network_count; i++) {
+        struct network_rule *r = &m.networks[i];
+        if (r->host[0] == 0 || r->port == 0) {
+            fprintf(stderr, "[addagent] network rule %d invalid (host='%s', port=%d). Ignoring.\n",
+                    i, r->host, r->port);
+            continue;
+        }
+        printf("[addagent] network rule %d: host='%s' port=%d\n",
+               i, r->host, r->port);
+        register_socket_policy(socket_map_fd, uid, r->host, r->port);
+    }
+
+    close(socket_map_fd);
     close(map_fd);
     printf("[addagent] Done.\n");
     return 0;

@@ -9,6 +9,7 @@
 #include <linux/limits.h>
 
 #define AID_MAP_PATH "/sys/fs/bpf/aid_inode_policies"
+#define AID_SOCKET_MAP_PATH "/sys/fs/bpf/aid_socket_policies"
 
 
 static int libbpf_print_fn(enum libbpf_print_level lvl,
@@ -44,9 +45,11 @@ int main(void)
     }
 
     // Check if map is already pinned
-    if (access(AID_MAP_PATH, F_OK) == 0) {
-        fprintf(stderr, "AID LSM already loaded (map exists at %s)\n", AID_MAP_PATH);
-        fprintf(stderr, "To reload, first run: sudo rm %s\n", AID_MAP_PATH);
+    if (access(AID_MAP_PATH, F_OK) == 0 || access(AID_SOCKET_MAP_PATH, F_OK) == 0) {
+        fprintf(stderr, "AID LSM already loaded (pinned map exists).\n");
+        fprintf(stderr, "To reload, first remove:\n");
+        fprintf(stderr, "  sudo rm %s\n", AID_MAP_PATH);
+        fprintf(stderr, "  sudo rm %s\n", AID_SOCKET_MAP_PATH);
         return 1;
     }
 
@@ -106,6 +109,18 @@ int main(void)
     err = bpf_map__pin(map, AID_MAP_PATH);
     if (err) {
         fprintf(stderr, "failed to pin map: %d\n", err);
+        return 1;
+    }
+
+    map = bpf_object__find_map_by_name(obj, "socket_policies");
+    if (!map) {
+        fprintf(stderr, "map 'socket_policies' not found\n");
+        return 1;
+    }
+
+    err = bpf_map__pin(map, AID_SOCKET_MAP_PATH);
+    if (err) {
+        fprintf(stderr, "failed to pin socket map: %d\n", err);
         return 1;
     }
 

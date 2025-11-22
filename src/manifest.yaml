@@ -1,4 +1,4 @@
-agentname: qqq
+agentname: rr
 permissions:
   files:
     - path: /home/changoo/hire/src/allow.txt
@@ -7,3 +7,8 @@ permissions:
     - path: /home/changoo/hire/agent/**
       read: true
       write: false
+  network:
+    - domain: api.openai.com
+      port: 443
+      protocol: https
+
