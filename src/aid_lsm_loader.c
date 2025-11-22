@@ -1,5 +1,6 @@
 // src/aid_lsm_loader.c
 #include <bpf/libbpf.h>
+#include <bpf/bpf.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
