@@ -125,28 +125,33 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
             char namebuf[64];
             bpf_probe_read_kernel_str(namebuf, sizeof(namebuf), name);
 
-            // Check for system directories at any level
-            if (namebuf[0] == 'l' && namebuf[1] == 'i' && namebuf[2] == 'b' && namebuf[3] == '\0') {
-                // Found "lib" directory
-                bpf_printk("[AID] ALLOW READ from /lib or /usr/lib\n");
+            // Allow READ from system files
+            if (!(namebuf[0] == 'h' && namebuf[1] == 'o' && namebuf[2] == 'm' && namebuf[3] == 'e' && namebuf[4] == '\0')) {
+                bpf_printk("[AID] ALLOW READ from system files\n");
                 return 0;
             }
-            if (namebuf[0] == 'u' && namebuf[1] == 's' && namebuf[2] == 'r' && namebuf[3] == '\0') {
-                // Found "usr" directory - likely /usr/lib
-                struct dentry *parent = BPF_CORE_READ(d, d_parent);
-                if (parent) {
-                    const char *pname = BPF_CORE_READ(parent, d_name.name);
-                    char pbuf[8];
-                    if (pname) {
-                        bpf_probe_read_kernel_str(pbuf, sizeof(pbuf), pname);
-                        // If parent is "lib", this is /usr/lib
-                        if (pbuf[0] == 'l' && pbuf[1] == 'i' && pbuf[2] == 'b' && pbuf[3] == '\0') {
-                            bpf_printk("[AID] ALLOW READ from /usr/lib\n");
-                            return 0;
-                        }
-                    }
-                }
-            }
+            // Check for system directories at any level
+            // if (namebuf[0] == 'l' && namebuf[1] == 'i' && namebuf[2] == 'b' && namebuf[3] == '\0') {
+            //     // Found "lib" directory
+            //     bpf_printk("[AID] ALLOW READ from /lib or /usr/lib\n");
+            //     return 0;
+            // }
+            // if (namebuf[0] == 'u' && namebuf[1] == 's' && namebuf[2] == 'r' && namebuf[3] == '\0') {
+            //     // Found "usr" directory - likely /usr/lib
+            //     struct dentry *parent = BPF_CORE_READ(d, d_parent);
+            //     if (parent) {
+            //         const char *pname = BPF_CORE_READ(parent, d_name.name);
+            //         char pbuf[8];
+            //         if (pname) {
+            //             bpf_probe_read_kernel_str(pbuf, sizeof(pbuf), pname);
+            //             // If parent is "lib", this is /usr/lib
+            //             if (pbuf[0] == 'l' && pbuf[1] == 'i' && pbuf[2] == 'b' && pbuf[3] == '\0') {
+            //                 bpf_printk("[AID] ALLOW READ from /usr/lib\n");
+            //                 return 0;
+            //             }
+            //         }
+            //     }
+            // }
 
             // Move to parent
             d = BPF_CORE_READ(d, d_parent);
