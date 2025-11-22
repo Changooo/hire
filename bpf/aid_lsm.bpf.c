@@ -157,7 +157,7 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     // First, check if there's a policy for this specific inode
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
-        bpf_printk("[AID] DENY no policy dev=%llu ino=%llu\n", key.dev, key.ino);
+        bpf_printk("[AID] DENY no policy file=%s dev=%llu ino=%llu\n", fname, key.dev, key.ino);
         return -EACCES;
     } else {
         bpf_printk("[AID] Found direct policy read=%d write=%d\n",
@@ -166,12 +166,12 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
 
     // Check MAY_READ / MAY_WRITE bits in mask
     if ((mask & MAY_READ) && !perm->allow_read) {
-        bpf_printk("[AID] DENY READ not allowed\n");
+        bpf_printk("[AID] DENY READ not allowed file=%s\n", fname);
         return -EACCES;
     }
 
     if ((mask & MAY_WRITE) && !perm->allow_write) {
-        bpf_printk("[AID] DENY WRITE not allowed\n");
+        bpf_printk("[AID] DENY WRITE not allowed file=%s\n", fname);
         return -EACCES;
     }
 
