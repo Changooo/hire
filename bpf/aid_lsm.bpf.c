@@ -158,6 +158,29 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
                 bpf_printk("[AID] ALLOW READ from /etc\n");
                 return 0;
             }
+            // Check for /run directory (runtime files, systemd-resolved, etc.)
+            if (namebuf[0] == 'r' && namebuf[1] == 'u' && namebuf[2] == 'n' && namebuf[3] == '\0') {
+                bpf_printk("[AID] ALLOW READ from /run\n");
+                return 0;
+            }
+            // Check for ca-certificates directory (SSL/TLS certificates)
+            if (namebuf[0] == 'c' && namebuf[1] == 'a' && namebuf[2] == '-' &&
+                namebuf[3] == 'c' && namebuf[4] == 'e' && namebuf[5] == 'r' && namebuf[6] == 't' &&
+                namebuf[7] == 'i' && namebuf[8] == 'f' && namebuf[9] == 'i' && namebuf[10] == 'c' &&
+                namebuf[11] == 'a' && namebuf[12] == 't' && namebuf[13] == 'e' && namebuf[14] == 's' && namebuf[15] == '\0') {
+                bpf_printk("[AID] ALLOW READ from ca-certificates\n");
+                return 0;
+            }
+            // Check for ssl directory (SSL certificates)
+            if (namebuf[0] == 's' && namebuf[1] == 's' && namebuf[2] == 'l' && namebuf[3] == '\0') {
+                bpf_printk("[AID] ALLOW READ from ssl\n");
+                return 0;
+            }
+            // Check for share directory (under /usr/share)
+            if (namebuf[0] == 's' && namebuf[1] == 'h' && namebuf[2] == 'a' && namebuf[3] == 'r' && namebuf[4] == 'e' && namebuf[5] == '\0') {
+                bpf_printk("[AID] ALLOW READ from share\n");
+                return 0;
+            }
 
             // Move to parent
             d = BPF_CORE_READ(d, d_parent);
