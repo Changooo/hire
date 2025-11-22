@@ -75,12 +75,17 @@ int main(void)
     }
 
     link = bpf_program__attach(prog);
-    if (!link) {
-        fprintf(stderr, "Failed to attach LSM program: %s\n", strerror(errno));
+    err = libbpf_get_error(link);
+    if (err) {
+        fprintf(stderr, "Failed to attach LSM program: %d (%s)\n", err, strerror(-err));
         return 1;
     }
 
+    int prog_fd = bpf_program__fd(prog);
+    int prog_id = bpf_prog_get_id_from_fd(prog_fd);
     printf("[aid_lsm_loader] LSM program attached successfully\n");
+    printf("  Program FD: %d, ID: %d\n", prog_fd, prog_id);
+    printf("  Link: %p\n", link);
 
     struct bpf_map *map;
 
