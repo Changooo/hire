@@ -5,6 +5,7 @@
 #include <glob.h>
 #include <libgen.h>
 #include <linux/bpf.h>
+#include <linux/limits.h>
 #include <pwd.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
@@ -14,6 +15,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
 #include <unistd.h>
 
 #include "../include/aid_shared.h"
@@ -324,6 +326,42 @@ static char *get_parent_dir(const char *path)
     return result;
 }
 
+// Recursive directory registration for ** patterns
+static void register_directory_recursive(int map_fd, uid_t uid, const char *dir_path,
+                                         int allow_read, int allow_write)
+{
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char full_path[PATH_MAX];
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
+
+        struct stat st;
+        if (stat(full_path, &st) < 0) {
+            continue;
+        }
+
+        // Register this file/directory
+        register_file_policy_for_inode(map_fd, uid, st.st_dev, st.st_ino,
+                                     allow_read, allow_write);
+
+        // Recurse into subdirectories
+        if (S_ISDIR(st.st_mode)) {
+            register_directory_recursive(map_fd, uid, full_path, allow_read, allow_write);
+        }
+    }
+
+    closedir(dir);
+}
+
 // Register path (or glob pattern) → stat() → inode
 static int register_file_policy_for_path(int map_fd,
                                          uid_t uid,
@@ -331,6 +369,45 @@ static int register_file_policy_for_path(int map_fd,
                                          int allow_read,
                                          int allow_write)
 {
+    // Handle recursive ** pattern
+    if (strstr(path_pattern, "**") != NULL) {
+        char base_path[PATH_MAX];
+        strncpy(base_path, path_pattern, sizeof(base_path) - 1);
+        base_path[sizeof(base_path) - 1] = '\0';
+
+        // Remove "**" and everything after
+        char *star_pos = strstr(base_path, "**");
+        if (star_pos) {
+            if (star_pos > base_path && *(star_pos - 1) == '/') {
+                *(star_pos - 1) = '\0';
+            } else {
+                *star_pos = '\0';
+            }
+        }
+
+        printf("[addagent] Recursive pattern: %s\n", base_path);
+
+        struct stat st;
+        if (stat(base_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            // Register base directory
+            register_file_policy_for_inode(map_fd, uid, st.st_dev, st.st_ino,
+                                         allow_read, allow_write);
+            // Register all subdirectories and files
+            register_directory_recursive(map_fd, uid, base_path, allow_read, allow_write);
+
+            // Also register parent directories for traversal
+            char *dir = get_parent_dir(base_path);
+            if (dir) {
+                register_directory_policy(map_fd, uid, dir, 1, allow_write);
+                free(dir);
+            }
+            return 0;
+        } else {
+            fprintf(stderr, "[addagent] Base path '%s' is not a directory\n", base_path);
+            return -1;
+        }
+    }
+
     glob_t g;
     memset(&g, 0, sizeof(g));
 
