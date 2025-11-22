@@ -1,9 +1,6 @@
 agentname: gd
 permissions:
   files:
-    - path: /tmp/test.txt
+    - path: /home/changoo/hire/src/allow.txt
       read: true
       write: false
-    - path: /tmp/*.log
-      read: true
-      write: true
