@@ -99,32 +99,59 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
             bpf_printk("[AID] ALLOW executable file mode=0x%x\n", mode);
             return 0;
         }
+
+        // Allow READ from system library directories
+        // Get path from dentry chain
+        struct dentry *d = dentry;
+        char path[256] = {0};
+        int pos = 255;
+
+        // Walk up dentry tree to build path (backwards)
+        #pragma unroll
+        for (int i = 0; i < 20; i++) {
+            if (!d) break;
+
+            const char *name = BPF_CORE_READ(d, d_name.name);
+            if (!name) break;
+
+            // Read name into buffer
+            char namebuf[64];
+            bpf_probe_read_kernel_str(namebuf, sizeof(namebuf), name);
+
+            // Check for system directories at any level
+            if (namebuf[0] == 'l' && namebuf[1] == 'i' && namebuf[2] == 'b' && namebuf[3] == '\0') {
+                // Found "lib" directory
+                bpf_printk("[AID] ALLOW READ from /lib or /usr/lib\n");
+                return 0;
+            }
+            if (namebuf[0] == 'u' && namebuf[1] == 's' && namebuf[2] == 'r' && namebuf[3] == '\0') {
+                // Found "usr" directory - likely /usr/lib
+                struct dentry *parent = BPF_CORE_READ(d, d_parent);
+                if (parent) {
+                    const char *pname = BPF_CORE_READ(parent, d_name.name);
+                    char pbuf[8];
+                    if (pname) {
+                        bpf_probe_read_kernel_str(pbuf, sizeof(pbuf), pname);
+                        // If parent is "lib", this is /usr/lib
+                        if (pbuf[0] == 'l' && pbuf[1] == 'i' && pbuf[2] == 'b' && pbuf[3] == '\0') {
+                            bpf_printk("[AID] ALLOW READ from /usr/lib\n");
+                            return 0;
+                        }
+                    }
+                }
+            }
+
+            // Move to parent
+            d = BPF_CORE_READ(d, d_parent);
+            if (d == BPF_CORE_READ(d, d_parent)) break; // reached root
+        }
     }
 
     // First, check if there's a policy for this specific inode
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
-        // bpf_printk("[AID] No direct policy, checking parent\n");
-        // // No direct policy - check parent directory
-        // struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
-        // if (parent && parent != dentry) {
-        //     struct inode *parent_inode = BPF_CORE_READ(parent, d_inode);
-        //     if (parent_inode) {
-        //         __u64 parent_kdev = BPF_CORE_READ(parent_inode, i_sb, s_dev);
-        //         __u32 parent_major = parent_kdev >> 20;
-        //         __u32 parent_minor = parent_kdev & 0xfffff;
-        //         key.dev = (parent_major << 8) | (parent_minor & 0xff);
-        //         key.ino = BPF_CORE_READ(parent_inode, i_ino);
-        //         bpf_printk("[AID] Parent check dev=%llu ino=%llu\n", key.dev, key.ino);
-        //         perm = bpf_map_lookup_elem(&inode_policies, &key);
-        //     }
-        // }
-
-        // Still no policy found - deny READ/WRITE (fail-close / whitelist mode)
-        if (!perm) {
-            bpf_printk("[AID] DENY no policy dev=%llu ino=%llu\n", key.dev, key.ino);
-            return -EACCES;
-        }
+        bpf_printk("[AID] DENY no policy dev=%llu ino=%llu\n", key.dev, key.ino);
+        return -EACCES;
     } else {
         bpf_printk("[AID] Found direct policy read=%d write=%d\n",
                    perm->allow_read, perm->allow_write);
