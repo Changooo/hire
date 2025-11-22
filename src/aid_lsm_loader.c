@@ -9,6 +9,7 @@
 #include <linux/limits.h>
 
 #define AID_MAP_PATH "/sys/fs/bpf/aid_inode_policies"
+#define AID_NETWORK_MAP_PATH "/sys/fs/bpf/aid_network_policies"
 
 
 static int libbpf_print_fn(enum libbpf_print_level lvl,
@@ -44,9 +45,10 @@ int main(void)
     }
 
     // Check if map is already pinned
-    if (access(AID_MAP_PATH, F_OK) == 0) {
-        fprintf(stderr, "AID LSM already loaded (map exists at %s)\n", AID_MAP_PATH);
-        fprintf(stderr, "To reload, first run: sudo rm %s\n", AID_MAP_PATH);
+    if (access(AID_MAP_PATH, F_OK) == 0 || access(AID_NETWORK_MAP_PATH, F_OK) == 0) {
+        fprintf(stderr, "AID LSM already loaded (map exists)\n");
+        fprintf(stderr, "To reload, first run: sudo rm %s %s /sys/fs/bpf/aid_lsm_link\n",
+                AID_MAP_PATH, AID_NETWORK_MAP_PATH);
         return 1;
     }
 
@@ -106,6 +108,19 @@ int main(void)
     err = bpf_map__pin(map, AID_MAP_PATH);
     if (err) {
         fprintf(stderr, "failed to pin map: %d\n", err);
+        return 1;
+    }
+
+    // Pin network_policies map
+    struct bpf_map *net_map = bpf_object__find_map_by_name(obj, "network_policies");
+    if (!net_map) {
+        fprintf(stderr, "map 'network_policies' not found\n");
+        return 1;
+    }
+
+    err = bpf_map__pin(net_map, AID_NETWORK_MAP_PATH);
+    if (err) {
+        fprintf(stderr, "failed to pin network map: %d\n", err);
         return 1;
     }
 

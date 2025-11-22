@@ -21,6 +21,7 @@
 #include "../include/aid_shared.h"
 
 #define AID_MAP_PATH "/sys/fs/bpf/aid_inode_policies"
+#define AID_NETWORK_MAP_PATH "/sys/fs/bpf/aid_network_policies"
 #define AGENT_USER_PREFIX "agent_"
 
 // --- String utilities ---
@@ -58,6 +59,7 @@ struct manifest_data {
     char agentname[128];
     struct file_rule files[MAX_FILE_RULES];
     int file_count;
+    int network_mail;  // network.mail permission
 };
 
 // --- Simple manifest.yaml parser ---
@@ -84,6 +86,7 @@ static int parse_manifest(const char *filename, struct manifest_data *out)
     char line[8192];
     int in_permissions = 0;
     int in_files = 0;
+    int in_network = 0;
     int current_rule_index = -1;
 
     while (fgets(line, sizeof(line), f)) {
@@ -108,6 +111,21 @@ static int parse_manifest(const char *filename, struct manifest_data *out)
 
         if (starts_with(p, "files:")) {
             in_files = 1;
+            in_network = 0;
+            continue;
+        }
+
+        if (starts_with(p, "network:")) {
+            in_network = 1;
+            in_files = 0;
+            continue;
+        }
+
+        // Parse network.mail
+        if (in_network && starts_with(p, "mail:")) {
+            p += strlen("mail:");
+            p = trim(p);
+            out->network_mail = (strcmp(p, "true") == 0 || strcmp(p, "True") == 0 || strcmp(p, "1") == 0);
             continue;
         }
 
@@ -247,6 +265,34 @@ static int open_inode_policy_map(void)
                 AID_MAP_PATH, strerror(errno));
     }
     return fd;
+}
+
+static int open_network_policy_map(void)
+{
+    int fd = bpf_obj_get(AID_NETWORK_MAP_PATH);
+    if (fd < 0) {
+        fprintf(stderr, "bpf_obj_get(%s) failed: %s\n",
+                AID_NETWORK_MAP_PATH, strerror(errno));
+    }
+    return fd;
+}
+
+static int register_network_policy(int map_fd, uid_t uid, int allow_mail)
+{
+    uint32_t key = (uint32_t)uid;
+    struct network_perm perm = {
+        .allow_mail = (uint8_t)(allow_mail ? 1 : 0),
+    };
+
+    int ret = bpf_map_update_elem(map_fd, &key, &perm, BPF_ANY);
+    if (ret < 0) {
+        fprintf(stderr, "bpf_map_update_elem (network) failed: uid=%u errno=%s\n",
+                uid, strerror(errno));
+        return -1;
+    }
+
+    printf("[addagent] Registered network policy: uid=%u mail=%d\n", uid, allow_mail);
+    return 0;
 }
 
 static int register_file_policy_for_inode(int map_fd,
@@ -476,8 +522,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("[addagent] manifest agentname='%s', file rules=%d\n",
-           m.agentname, m.file_count);
+    printf("[addagent] manifest agentname='%s', file rules=%d, network.mail=%d\n",
+           m.agentname, m.file_count, m.network_mail);
 
     uid_t uid = ensure_agent_user(m.agentname);
     if ((int)uid < 0)
@@ -499,6 +545,16 @@ int main(int argc, char **argv)
     }
 
     close(map_fd);
+
+    // Register network permissions
+    int net_map_fd = open_network_policy_map();
+    if (net_map_fd < 0) {
+        fprintf(stderr, "[addagent] Warning: Could not open network policy map\n");
+    } else {
+        register_network_policy(net_map_fd, uid, m.network_mail);
+        close(net_map_fd);
+    }
+
     printf("[addagent] Done.\n");
     return 0;
 }

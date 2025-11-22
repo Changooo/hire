@@ -8,6 +8,7 @@ echo "[unload] === AID LSM full cleanup ==="
 ### 1. Remove pinned maps
 echo "[unload] Removing pinned AID maps..."
 sudo rm -f /sys/fs/bpf/aid_inode_policies 2>/dev/null || true
+sudo rm -f /sys/fs/bpf/aid_network_policies 2>/dev/null || true
 sudo rm -f /sys/fs/bpf/aid_* 2>/dev/null || true
 
 ### 2. Find bpf_link objects that belong to AID LSM

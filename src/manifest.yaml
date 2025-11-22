@@ -7,3 +7,5 @@ permissions:
     - path: /home/changoo/hire/agent/**
       read: true
       write: false
+  network:
+    mail: true

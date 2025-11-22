@@ -34,6 +34,14 @@ struct {
     __uint(max_entries, 16384);
 } inode_policies SEC(".maps");
 
+// uid -> network_perm
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);  // uid
+    __type(value, struct network_perm);
+    __uint(max_entries, 1024);
+} network_policies SEC(".maps");
+
 // LSM: file_permission - called on every file access
 SEC("lsm/file_permission")
 int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
@@ -70,8 +78,15 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
         bpf_printk("[AID] ALLOW device mode=0x%x\n", mode);
         return 0;
     }
+
+    // Check socket permission based on network.mail
     if (S_ISSOCK(mode)) {
-        bpf_printk("[AID] ALLOW socket mode=0x%x\n", mode);
+        struct network_perm *net_perm = bpf_map_lookup_elem(&network_policies, &uid);
+        if (!net_perm || !net_perm->allow_mail) {
+            bpf_printk("[AID] DENY socket uid=%u no network.mail permission\n", uid);
+            return -EACCES;
+        }
+        bpf_printk("[AID] ALLOW socket uid=%u network.mail=true\n", uid);
         return 0;
     }
 

@@ -37,4 +37,15 @@ struct file_perm {
 #endif
 };
 
+// Network permissions for UID
+struct network_perm {
+#ifdef __BPF__
+    __u8 allow_mail;
+    __u8 _pad[7];   // padding for alignment
+#else
+    uint8_t allow_mail;
+    uint8_t _pad[7];   // padding for alignment
+#endif
+};
+
 #endif // AID_SHARED_H
