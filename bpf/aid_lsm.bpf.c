@@ -119,7 +119,7 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
             }
         }
 
-        If file has any execute bit, allow read
+        // If file has any execute bit, allow read
         if (mode & 0111) {
             bpf_printk("[AID] ALLOW executable file mode=0x%x\n", mode);
             return 0;
