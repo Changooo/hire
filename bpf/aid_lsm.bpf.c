@@ -140,24 +140,6 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
                     }
                 }
             }
-            // // Check for venv directory (Python virtual environment)
-            // if (namebuf[0] == 'v' && namebuf[1] == 'e' && namebuf[2] == 'n' && namebuf[3] == 'v' && namebuf[4] == '\0') {
-            //     bpf_printk("[AID] ALLOW READ from venv\n");
-            //     return 0;
-            // }
-            // // Check for site-packages directory (Python packages)
-            // if (namebuf[0] == 's' && namebuf[1] == 'i' && namebuf[2] == 't' && namebuf[3] == 'e' &&
-            //     namebuf[4] == '-' && namebuf[5] == 'p' && namebuf[6] == 'a' && namebuf[7] == 'c' &&
-            //     namebuf[8] == 'k' && namebuf[9] == 'a' && namebuf[10] == 'g' && namebuf[11] == 'e' &&
-            //     namebuf[12] == 's' && namebuf[13] == '\0') {
-            //     bpf_printk("[AID] ALLOW READ from site-packages\n");
-            //     return 0;
-            // }
-            // Check for /etc directory (system configuration, DNS, etc.)
-            if (namebuf[0] == 'e' && namebuf[1] == 't' && namebuf[2] == 'c' && namebuf[3] == '\0') {
-                bpf_printk("[AID] ALLOW READ from /etc\n");
-                return 0;
-            }
 
             // Move to parent
             d = BPF_CORE_READ(d, d_parent);
