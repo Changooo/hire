@@ -64,20 +64,44 @@ int main(void)
         return 1;
     }
 
-    // struct bpf_map *map;
+    // Attach LSM program
+    struct bpf_program *prog;
+    struct bpf_link *link;
 
-    // map = bpf_object__find_map_by_name(obj, "inode_policies");
-    // if (!map) {
-    //     fprintf(stderr, "map 'inode_policies' not found\n");
-    //     return 1;
-    // }
+    prog = bpf_object__find_program_by_name(obj, "aid_enforce_file_permission");
+    if (!prog) {
+        fprintf(stderr, "Failed to find BPF program 'aid_enforce_file_permission'\n");
+        return 1;
+    }
 
-    // err = bpf_map__pin(map, AID_MAP_PATH);
-    // if (err) {
-    //     fprintf(stderr, "failed to pin map: %d\n", err);
-    //     return 1;
-    // }
+    link = bpf_program__attach(prog);
+    if (!link) {
+        fprintf(stderr, "Failed to attach LSM program: %s\n", strerror(errno));
+        return 1;
+    }
 
+    printf("[aid_lsm_loader] LSM program attached successfully\n");
+
+    struct bpf_map *map;
+
+    map = bpf_object__find_map_by_name(obj, "inode_policies");
+    if (!map) {
+        fprintf(stderr, "map 'inode_policies' not found\n");
+        return 1;
+    }
+
+    err = bpf_map__pin(map, AID_MAP_PATH);
+    if (err) {
+        fprintf(stderr, "failed to pin map: %d\n", err);
+        return 1;
+    }
+
+    // Pin the link to keep LSM attached
+    err = bpf_link__pin(link, "/sys/fs/bpf/aid_lsm_link");
+    if (err) {
+        fprintf(stderr, "failed to pin link: %d\n", err);
+        return 1;
+    }
 
     printf("[aid_lsm_loader] AID LSM BPF loaded successfully.\n");
     // LSM BPF is attached to kernel, safe to exit process now.
