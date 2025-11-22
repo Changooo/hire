@@ -54,9 +54,23 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
 
-    // Allow EXEC unconditionally (only control READ/WRITE)
+    // Allow EXEC unconditionally (including exec+read combinations)
+    // When executing a file, kernel may check MAY_EXEC | MAY_READ together
     if (mask & MAY_EXEC) {
         return 0;
+    }
+
+    // Also allow pure READ on executable files (for dynamic linker, libraries, etc.)
+    // This is a pragmatic approach: we only strictly control writes
+    if (mask == MAY_READ) {
+        struct inode *ino_ptr = BPF_CORE_READ(dentry, d_inode);
+        if (ino_ptr) {
+            umode_t mode = BPF_CORE_READ(ino_ptr, i_mode);
+            // If file has any execute bit, allow read
+            if (mode & 0111) {
+                return 0;
+            }
+        }
     }
 
     // First, check if there's a policy for this specific inode
