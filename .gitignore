@@ -1,6 +1,9 @@
 src/hire
 src/aid_lsm_loader
 src/addagent
+src/check_dev
+src/dump_policies
 .claude/
 venv/
 */__pycache__/
+bpf/aid_lsm.bpf.o
