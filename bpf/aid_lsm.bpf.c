@@ -104,21 +104,21 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     // First, check if there's a policy for this specific inode
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
-        bpf_printk("[AID] No direct policy, checking parent\n");
-        // No direct policy - check parent directory
-        struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
-        if (parent && parent != dentry) {
-            struct inode *parent_inode = BPF_CORE_READ(parent, d_inode);
-            if (parent_inode) {
-                __u64 parent_kdev = BPF_CORE_READ(parent_inode, i_sb, s_dev);
-                __u32 parent_major = parent_kdev >> 20;
-                __u32 parent_minor = parent_kdev & 0xfffff;
-                key.dev = (parent_major << 8) | (parent_minor & 0xff);
-                key.ino = BPF_CORE_READ(parent_inode, i_ino);
-                bpf_printk("[AID] Parent check dev=%llu ino=%llu\n", key.dev, key.ino);
-                perm = bpf_map_lookup_elem(&inode_policies, &key);
-            }
-        }
+        // bpf_printk("[AID] No direct policy, checking parent\n");
+        // // No direct policy - check parent directory
+        // struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
+        // if (parent && parent != dentry) {
+        //     struct inode *parent_inode = BPF_CORE_READ(parent, d_inode);
+        //     if (parent_inode) {
+        //         __u64 parent_kdev = BPF_CORE_READ(parent_inode, i_sb, s_dev);
+        //         __u32 parent_major = parent_kdev >> 20;
+        //         __u32 parent_minor = parent_kdev & 0xfffff;
+        //         key.dev = (parent_major << 8) | (parent_minor & 0xff);
+        //         key.ino = BPF_CORE_READ(parent_inode, i_ino);
+        //         bpf_printk("[AID] Parent check dev=%llu ino=%llu\n", key.dev, key.ino);
+        //         perm = bpf_map_lookup_elem(&inode_policies, &key);
+        //     }
+        // }
 
         // Still no policy found - deny READ/WRITE (fail-close / whitelist mode)
         if (!perm) {
