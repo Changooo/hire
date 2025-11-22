@@ -66,12 +66,15 @@ permissions:
     - path: /home/user/data/*.json
       read: true
       write: true
-    - path: /etc/passwd
-      read: false
-      write: false
+    - path: /data/agent/output.txt  # 파일이 없어도 OK - 부모 디렉토리 정책 등록
+      read: true
+      write: true
 ```
 
-**주의**: glob 패턴(`*`)을 사용하면 **현재 존재하는 파일만** 등록됩니다.
+**절대 경로 사용 시**:
+- 파일이 존재하지 않아도 자동으로 **부모 디렉토리**에 정책 등록
+- 예: `/data/agent/output.txt` → `/data/agent` 디렉토리의 모든 파일 접근 가능
+- glob 패턴(`*`)은 현재 존재하는 파일만 등록하지만, 부모 디렉토리는 함께 등록됨
 
 ### Step 3: 에이전트 등록
 
@@ -158,19 +161,27 @@ sudo bpftool prog list | grep lsm
    - WSL2는 기본적으로 LSM BPF 미지원
    - 해결: 커널 재컴파일 또는 Native Linux 사용
 
-2. **file_open 훅만 사용**
-   - 이미 열린 파일 디스크립터를 통한 read/write는 검사 안 됨
+2. **file_permission 훅 사용**
+   - 파일 열기 시 권한 검사 수행
+   - 이미 열린 파일 디스크립터를 통한 read/write는 추가 검사 안 됨
    - fork 후 상속된 fd도 검사 안 됨
 
-3. **Fail-open 정책**
-   - 정책이 없는 파일은 모두 허용
-   - 프로덕션에서는 fail-closed로 변경 권장
+3. **Fail-close 정책**
+   - **정책이 없는 파일/디렉토리는 모두 거부** (whitelist mode)
+   - AID 범위(50000~59999) UID만 검사 대상
+   - 일반 사용자는 영향받지 않음
 
-4. **Glob 패턴 제한**
-   - `addagent` 실행 시점에 존재하는 파일만 등록
-   - 이후 생성되는 파일은 정책 미적용
+4. **절대 경로 지원**
+   - ✅ 절대 경로로 파일 지정 시 자동으로 부모 디렉토리 정책 등록
+   - 파일이 존재하지 않아도 디렉토리 정책으로 접근 가능
+   - 예: `/data/agent/output.txt` → `/data/agent` 디렉토리에 정책 등록
 
-5. **실행 권한 미지원**
+5. **Glob 패턴 제한**
+   - `addagent` 실행 시점에 존재하는 파일만 직접 등록
+   - 이후 생성되는 파일은 부모 디렉토리 정책으로 접근 제어
+   - 와일드카드 패턴은 현재 파일만 확장됨
+
+6. **실행 권한 미지원**
    - 현재는 read/write만 제어
    - execute 권한 검사 없음
 

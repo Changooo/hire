@@ -52,19 +52,38 @@ async def send_email(recipient: str, subject: str, body: str) -> str:
 #  File tools
 # ======================================================
 async def read_file(path: str) -> str:
+    import os
     try:
-        with open(path, "r") as f:
+        abs_path = os.path.abspath(path)
+        if not os.path.exists(abs_path):
+            return f"Error: File does not exist: {abs_path}"
+        if not os.access(abs_path, os.R_OK):
+            return f"Error: No read permission for file: {abs_path}"
+
+        with open(abs_path, "r") as f:
             data = f.read()
-        return f"Contents of {path}:\n{data}"
+        return f"Contents of {abs_path}:\n{data}"
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
 
 async def write_file(path: str, data: str) -> str:
+    import os
     try:
-        with open(path, "w") as f:
+        abs_path = os.path.abspath(path)
+        dir_path = os.path.dirname(abs_path)
+
+        # Create directory if it doesn't exist
+        if dir_path and not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
+
+        # Check if we can write to the directory
+        if not os.access(dir_path if dir_path else ".", os.W_OK):
+            return f"Error: No write permission for directory: {dir_path}"
+
+        with open(abs_path, "w") as f:
             f.write(data)
-        return f"{path} has been written."
+        return f"{abs_path} has been written."
     except Exception as e:
         return f"Error writing file: {str(e)}"
 
