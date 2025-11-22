@@ -18,10 +18,11 @@
 #define S_IFMT   00170000
 #define S_IFBLK  0060000
 #define S_IFCHR  0020000
+#define S_IFSOCK 0140000
 
 #define S_ISBLK(m)  (((m) & S_IFMT) == S_IFBLK)
 #define S_ISCHR(m)  (((m) & S_IFMT) == S_IFCHR)
-
+#define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -67,6 +68,10 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     umode_t mode = BPF_CORE_READ(inode, i_mode);
     if (S_ISCHR(mode) || S_ISBLK(mode)) {
         bpf_printk("[AID] ALLOW device mode=0x%x\n", mode);
+        return 0;
+    }
+    if (S_ISSOCK(mode)) {
+        bpf_printk("[AID] ALLOW socket mode=0x%x\n", mode);
         return 0;
     }
 
