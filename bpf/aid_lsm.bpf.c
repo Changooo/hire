@@ -40,11 +40,8 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     __u64 uid_gid = bpf_get_current_uid_gid();
     __u32 uid = uid_gid & 0xffffffff;
 
-    bpf_printk("[AID] CALLED uid=%u mask=0x%x\n", uid, mask);
-
     // Ignore non-AID users
     if (uid < AID_UID_BASE || uid >= AID_UID_MAX) {
-        bpf_printk("[AID] SKIP non-AID uid=%u\n", uid);
         return 0;
     }
 
