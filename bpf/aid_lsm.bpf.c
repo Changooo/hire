@@ -14,6 +14,14 @@
 
 #define EACCES 13
 
+// File type macros (from linux/stat.h)
+#define S_IFMT   00170000
+#define S_IFBLK  0060000
+#define S_IFCHR  0020000
+
+#define S_ISBLK(m)  (((m) & S_IFMT) == S_IFBLK)
+#define S_ISCHR(m)  (((m) & S_IFMT) == S_IFCHR)
+
 
 char LICENSE[] SEC("license") = "GPL";
 
