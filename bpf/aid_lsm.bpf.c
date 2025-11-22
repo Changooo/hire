@@ -40,9 +40,13 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     __u64 uid_gid = bpf_get_current_uid_gid();
     __u32 uid = uid_gid & 0xffffffff;
 
+    bpf_printk("[AID] CALLED uid=%u mask=0x%x\n", uid, mask);
+
     // Ignore non-AID users
-    if (uid < AID_UID_BASE || uid >= AID_UID_MAX)
+    if (uid < AID_UID_BASE || uid >= AID_UID_MAX) {
+        bpf_printk("[AID] SKIP non-AID uid=%u\n", uid);
         return 0;
+    }
 
     struct dentry *dentry;
     struct inode *inode;
@@ -51,16 +55,21 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
 
     // file -> dentry -> inode
     dentry = BPF_CORE_READ(file, f_path.dentry);
-    if (!dentry)
+    if (!dentry) {
+        bpf_printk("[AID] ALLOW no dentry\n");
         return 0;
+    }
 
     inode = BPF_CORE_READ(dentry, d_inode);
-    if (!inode)
+    if (!inode) {
+        bpf_printk("[AID] ALLOW no inode\n");
         return 0;
+    }
 
     // Allow access to character/block devices (stdin/stdout/stderr, /dev/null, etc.)
     umode_t mode = BPF_CORE_READ(inode, i_mode);
     if (S_ISCHR(mode) || S_ISBLK(mode)) {
+        bpf_printk("[AID] ALLOW device mode=0x%x\n", mode);
         return 0;
     }
 
@@ -75,9 +84,13 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     key.ino = BPF_CORE_READ(inode, i_ino);
     key.uid = uid;
 
+    bpf_printk("[AID] CHECK uid=%u dev=%llu ino=%llu mask=0x%x\n",
+               uid, key.dev, key.ino, mask);
+
     // Allow EXEC unconditionally (including exec+read combinations)
     // When executing a file, kernel may check MAY_EXEC | MAY_READ together
     if (mask & MAY_EXEC) {
+        bpf_printk("[AID] ALLOW EXEC mask=0x%x\n", mask);
         return 0;
     }
 
@@ -86,6 +99,7 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     if (mask == MAY_READ) {
         // If file has any execute bit, allow read
         if (mode & 0111) {
+            bpf_printk("[AID] ALLOW executable file mode=0x%x\n", mode);
             return 0;
         }
     }
@@ -93,6 +107,7 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
     // First, check if there's a policy for this specific inode
     perm = bpf_map_lookup_elem(&inode_policies, &key);
     if (!perm) {
+        bpf_printk("[AID] No direct policy, checking parent\n");
         // No direct policy - check parent directory
         struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
         if (parent && parent != dentry) {
@@ -103,30 +118,32 @@ int BPF_PROG(aid_enforce_file_permission, struct file *file, int mask)
                 __u32 parent_minor = parent_kdev & 0xfffff;
                 key.dev = (parent_major << 8) | (parent_minor & 0xff);
                 key.ino = BPF_CORE_READ(parent_inode, i_ino);
+                bpf_printk("[AID] Parent check dev=%llu ino=%llu\n", key.dev, key.ino);
                 perm = bpf_map_lookup_elem(&inode_policies, &key);
             }
         }
 
         // Still no policy found - deny READ/WRITE (fail-close / whitelist mode)
         if (!perm) {
-            bpf_printk("AID uid=%u denied ACCESS (no policy) dev=%llu ino=%llu\n",
-                       uid, key.dev, key.ino);
+            bpf_printk("[AID] DENY no policy dev=%llu ino=%llu\n", key.dev, key.ino);
             return -EACCES;
         }
+    } else {
+        bpf_printk("[AID] Found direct policy read=%d write=%d\n",
+                   perm->allow_read, perm->allow_write);
     }
 
     // Check MAY_READ / MAY_WRITE bits in mask
     if ((mask & MAY_READ) && !perm->allow_read) {
-        bpf_printk("AID uid=%u denied READ dev=%llu ino=%llu\n",
-                   uid, key.dev, key.ino);
+        bpf_printk("[AID] DENY READ not allowed\n");
         return -EACCES;
     }
 
     if ((mask & MAY_WRITE) && !perm->allow_write) {
-        bpf_printk("AID uid=%u denied WRITE dev=%llu ino=%llu\n",
-                   uid, key.dev, key.ino);
+        bpf_printk("[AID] DENY WRITE not allowed\n");
         return -EACCES;
     }
 
+    bpf_printk("[AID] ALLOW policy match\n");
     return 0;
 }
